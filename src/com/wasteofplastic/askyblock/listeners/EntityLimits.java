@@ -274,6 +274,95 @@ public class EntityLimits implements Listener {
         }
         // plugin.getLogger().info("DEBUG: Animal count is " + animals);
     }
+    
+    @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
+    public void onMonsterSpawn(final CreatureSpawnEvent e) {
+        // If not in the right world, return
+        if (!IslandGuard.inWorld(e.getEntity())) {
+            return;
+        }
+        // If not a monster
+        if (!(e.getEntity() instanceof Monster)) {
+            return;
+        }
+        if (DEBUG2) {
+            plugin.getLogger().info("Monster spawn event! " + e.getEventName());
+            plugin.getLogger().info(e.getSpawnReason().toString());
+            plugin.getLogger().info(e.getEntityType().toString());
+        }
+        // If there's no limit - leave it
+        if (Settings.monsterSpawnLimit <= 0) {
+            if (DEBUG2)
+                plugin.getLogger().info("No limit on mob spawning");
+            return;
+        }
+        // We only care about spawner
+        if (e.getSpawnReason() != SpawnReason.SPAWNER && e.getSpawnReason() != SpawnReason.SPAWNER_EGG && e.getSpawnReason() != SpawnReason.NATURAL && !e.getSpawnReason().name().contains("BABY")) {
+            if (DEBUG2)
+                plugin.getLogger().info("Not Spawner or natural");
+            return;
+        }
+        LivingEntity monster = e.getEntity();
+        Island island = plugin.getGrid().getProtectedIslandAt(monster.getLocation());
+        if (island == null) {
+            // Animal is spawning outside of an island so ignore
+            if (DEBUG2)
+                plugin.getLogger().info("Outside island, so spawning is okay");
+            return;
+        }
+        boolean overLimit = false;
+        int monsters = 0;
+        for (int x = island.getMinProtectedX() /16; x <= (island.getMinProtectedX() + island.getProtectionSize() - 1)/16; x++) {
+            for (int z = island.getMinProtectedZ() /16; z <= (island.getMinProtectedZ() + island.getProtectionSize() - 1)/16; z++) {
+                for (Entity entity : ASkyBlock.getIslandWorld().getChunkAt(x, z).getEntities()) {
+                    if (entity instanceof Monster) {
+                        if (DEBUG2)
+                            plugin.getLogger().info("DEBUG: Monster count is " + monsters);
+                        monsters++;
+                        if (monsters >= Settings.monsterSpawnLimit) {
+                            // Delete any extra animals
+                            overLimit = true;
+                            monster.remove();
+                            if (DEBUG2)
+                                plugin.getLogger().info("Over limit! >=" + Settings.monsterSpawnLimit);
+                            e.setCancelled(true);
+                        }                    
+                    }
+                }
+            }
+        }
+        if (DEBUG2)
+            plugin.getLogger().info("Counting nether");
+        // Nether check
+        if (Settings.createNether && Settings.newNether && ASkyBlock.getNetherWorld() != null) {
+            for (int x = island.getMinProtectedX() /16; x <= (island.getMinProtectedX() + island.getProtectionSize() - 1)/16; x++) {
+                for (int z = island.getMinProtectedZ() /16; z <= (island.getMinProtectedZ() + island.getProtectionSize() - 1)/16; z++) {
+                    for (Entity entity : ASkyBlock.getNetherWorld().getChunkAt(x, z).getEntities()) {
+                        if (entity instanceof Monster) {
+                            if (DEBUG2)
+                                plugin.getLogger().info("DEBUG: Monster count is " + monsters);
+                            monsters++;
+                            if (monsters >= Settings.monsterSpawnLimit) {
+                                // Delete any extra animals
+                                if (DEBUG2)
+                                    plugin.getLogger().info("Over limit! >=" + Settings.monsterSpawnLimit);
+                                overLimit = true;
+                                monster.remove();
+                                e.setCancelled(true);
+                            }
+                        } 
+                    }
+                }
+            }
+        }
+        if (overLimit) {
+                plugin.getLogger().warning(
+                        "Island at " + island.getCenter().getBlockX() + "," + island.getCenter().getBlockZ() + " hit the island monster limit of "
+                                + Settings.monsterSpawnLimit);
+            
+        }
+        // plugin.getLogger().info("DEBUG: Animal count is " + animals);
+    }
 
     /**
      * Prevents mobs spawning naturally at spawn or in an island
